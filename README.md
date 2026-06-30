@@ -1,6 +1,8 @@
-# Momentum Screener v0.1 — Mode B Technical MVP
+# Momentum Screener — Mode B Technical
 
-This is the first working version of the Mode B / Early Stage 2 momentum screener.
+This is a Streamlit-based early Stage 2 / pre-breakout momentum screener for NSE stocks.
+
+The project intentionally starts with technical factors first so the chart logic can be validated before adding fundamentals.
 
 ## What it does
 
@@ -16,17 +18,37 @@ This is the first working version of the Mode B / Early Stage 2 momentum screene
   - ROC 20
   - Composite RSI
   - Base length
+  - Base range
+  - Higher-low count
+  - Prior drop into base
   - Resistance
   - Distance to resistance
   - Average traded value
 - Applies configurable Mode B gates.
-- Produces a ranked shortlist with setup status and TradingView links.
+- Produces descriptive setup labels and a ranked shortlist with TradingView links.
 - Allows CSV download from the Streamlit UI.
+
+## Key improvement in this build
+
+The earlier `WATCH` label was too broad. This build splits it into more useful statuses:
+
+- `SETUP_READY`
+- `TRIGGERED_BREAKOUT`
+- `WATCH_WEAK_RS`
+- `WATCH_WEAK_RS_TOO_FAR`
+- `WATCH_TOO_FAR_FROM_RESISTANCE`
+- `WATCH_NEAR_RESISTANCE_NOT_TIGHT`
+- `WATCH_NEEDS_HIGHER_LOW`
+- `WATCH_POST_BREAKDOWN`
+- `WATCH_REVIEW`
+- `REJECTED`
+
+The output also includes `Setup_Reason`, so you can quickly see why a stock received its label.
 
 ## Install
 
 ```bash
-cd momentum_screener_v01
+cd momentum_screener
 python -m venv .venv
 source .venv/bin/activate      # Mac/Linux
 # .venv\Scripts\activate       # Windows
@@ -67,4 +89,4 @@ The app will automatically append `.NS` for Yahoo Finance.
 
 This is a screening tool, not a buy/sell system. Use it to generate a ranked watchlist and then manually review charts, fundamentals, liquidity, results, and news.
 
-Version 0.1 intentionally excludes fundamentals. Fundamental factors such as revenue growth, EPS acceleration, ROCE, promoter pledge, debt/equity, and Piotroski F-Score should be added in Version 0.2/0.3 after the technical engine is validated.
+Fundamental factors such as revenue growth, EPS acceleration, ROCE, promoter pledge, debt/equity, and Piotroski F-Score are intentionally excluded until the technical engine is validated.

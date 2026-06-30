@@ -18,10 +18,10 @@ from src.data_loader import parse_manual_symbols, parse_universe_csv
 from src.screener import run_mode_b_screener
 
 
-st.set_page_config(page_title="Momentum Screener v0.1", layout="wide")
+st.set_page_config(page_title="Momentum Screener", layout="wide")
 
-st.title("Momentum Screener v0.1 — Mode B Technical MVP")
-st.caption("Early Stage 2 / pre-breakout screener for NSE stocks. Use this for watchlist generation, not direct buy/sell decisions.")
+st.title("Momentum Screener — Mode B Technical")
+st.caption("Early Stage 2 / pre-breakout watchlist generator. Status labels are descriptive; this is not a buy/sell system.")
 
 with st.sidebar:
     st.header("Universe")
@@ -96,12 +96,17 @@ if run_btn:
     passing = results[results["Pass_Gates"] == True].copy()
     rejected = results[results["Pass_Gates"] == False].copy()
 
-    st.subheader("Top Mode B Candidates")
-    st.caption("Sorted by Mode B Technical Score. Review charts manually before taking action.")
+    st.subheader("Top Mode B candidates")
+    st.caption("Prioritize SETUP_READY and TRIGGERED_BREAKOUT. WATCH labels now explain what is missing.")
+
+    status_counts = results["Setup_Status"].value_counts().reset_index()
+    status_counts.columns = ["Setup_Status", "Count"]
+    st.dataframe(status_counts, use_container_width=True, hide_index=True)
 
     display_cols = [
         "Symbol",
         "Setup_Status",
+        "Setup_Reason",
         "ModeB_Technical_Score",
         "Close",
         "Price_vs_150DMA",
@@ -110,6 +115,9 @@ if run_btn:
         "RS_Momentum_10D",
         "BBW_Pctl",
         "Base_Length_Weeks",
+        "Base_Range_Pct",
+        "Higher_Low_Count",
+        "Prior_Drop_Pct",
         "Dist_To_Resistance_Pct",
         "Volume_Ratio",
         "Composite_RSI",
@@ -134,7 +142,7 @@ if run_btn:
     st.download_button(
         "Download full results CSV",
         data=csv,
-        file_name="momentum_screener_v01_results.csv",
+        file_name="momentum_screener_results.csv",
         mime="text/csv",
     )
 
@@ -161,8 +169,13 @@ else:
         4. Run the screener.
         5. Review the top candidates on TradingView.
 
-        ### Suggested first test universe
+        ### How to read the statuses
 
-        Paste 20–50 symbols first to validate the output before running a large universe.
+        - `SETUP_READY`: close to resistance, compressed, RS improving, RSI above 50.
+        - `TRIGGERED_BREAKOUT`: already broke above resistance with volume confirmation.
+        - `WATCH_WEAK_RS`: passed loose gates, but relative strength momentum is weakening.
+        - `WATCH_TOO_FAR_FROM_RESISTANCE`: passed gates, but not yet close enough for breakout entry.
+        - `WATCH_POST_BREAKDOWN`: range detected after a large prior fall; requires manual caution.
+        - `REJECTED`: failed one or more gates.
         """
     )

@@ -14,7 +14,7 @@ from .indicators import (
     volume_ratio,
 )
 from .relative_strength import mansfield_rs, rs_momentum
-from .scoring import classify_setup, compute_mode_b_scores
+from .scoring import classify_setup, compute_mode_b_scores, setup_reason
 from .utils import tradingview_link
 
 
@@ -60,6 +60,10 @@ def compute_latest_factors(symbol: str, df: pd.DataFrame, benchmark_close: pd.Se
         "Resistance": resistance,
         "Dist_To_Resistance_Pct": dist_res,
         "Close_Tightness_Pct": base["close_tightness_pct"],
+        "Base_Range_Pct": base.get("base_range_pct", np.nan),
+        "Higher_Low_Count": base.get("higher_low_count", 0),
+        "Volume_Dryup_Ratio": base.get("volume_dryup_ratio", np.nan),
+        "Prior_Drop_Pct": base.get("prior_drop_pct", np.nan),
         "Avg_Traded_Value_20D_Cr": avg_traded_value_cr,
         "TradingView": tradingview_link(symbol),
     }
@@ -122,6 +126,7 @@ def run_mode_b_screener(
 
     results = compute_mode_b_scores(results)
     results["Setup_Status"] = results.apply(classify_setup, axis=1)
+    results["Setup_Reason"] = results.apply(setup_reason, axis=1)
 
     results = results.sort_values(
         ["Pass_Gates", "ModeB_Technical_Score"],
@@ -133,7 +138,8 @@ def run_mode_b_screener(
         "Close", "Price_vs_150DMA", "SMA150", "SMA150_Slope_20D_Pct",
         "Mansfield_RS", "RS_Momentum_10D", "Volume_Ratio", "BBW_Pctl",
         "ROC_20D_Pct", "Composite_RSI", "Resistance", "Dist_To_Resistance_Pct",
-        "Close_Tightness_Pct", "Avg_Traded_Value_20D_Cr", "ModeB_Technical_Score",
+        "Close_Tightness_Pct", "Base_Range_Pct", "Volume_Dryup_Ratio",
+        "Prior_Drop_Pct", "Avg_Traded_Value_20D_Cr", "ModeB_Technical_Score",
     ]
     for c in round_cols:
         if c in results.columns:
