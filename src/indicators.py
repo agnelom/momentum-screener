@@ -64,3 +64,43 @@ def macd_histogram(close: pd.Series) -> pd.Series:
 def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     direction = np.sign(close.diff()).fillna(0)
     return (direction * volume).cumsum()
+
+
+def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [
+            high - low,
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return tr
+
+
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    tr = true_range(high, low, close)
+    return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+
+def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Wilder ADX. Measures trend strength, not direction."""
+    up_move = high.diff()
+    down_move = -low.diff()
+
+    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=high.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=high.index)
+
+    tr = true_range(high, low, close)
+    atr_w = tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    plus_di = 100 * plus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_w.replace(0, np.nan)
+    minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_w.replace(0, np.nan)
+    dx = ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)) * 100
+    return dx.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+
+def close_location_value(close: pd.Series, high: pd.Series, low: pd.Series) -> pd.Series:
+    """Where close/current price is within the day's range: 0 = low, 100 = high."""
+    rng = (high - low).replace(0, np.nan)
+    return ((close - low) / rng * 100).clip(lower=0, upper=100)

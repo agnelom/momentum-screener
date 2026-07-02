@@ -16,6 +16,27 @@ MODE_B_WEIGHTS = {
     "ma_slope_score": 0.10,
 }
 
+MODE_C_WEIGHTS = {
+    "mansfield_rs_score": 0.20,
+    "rs_momentum_score": 0.15,
+    "adx_sweet_score": 0.15,
+    "rsi_sweet_score": 0.15,
+    "volume_score": 0.15,
+    "ema_distance_score": 0.10,
+    "recent_high_score": 0.10,
+}
+
+NEAR_CLOSE_WEIGHTS = {
+    "mansfield_rs_score": 0.15,
+    "rs_momentum_score": 0.15,
+    "rsi_sweet_score": 0.12,
+    "adx_sweet_score": 0.10,
+    "projected_rvol_score": 0.18,
+    "close_location_score": 0.15,
+    "ema_distance_score": 0.08,
+    "day_range_score": 0.07,
+}
+
 
 def compute_mode_b_scores(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
@@ -48,12 +69,80 @@ def compute_mode_b_scores(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def classify_setup(row: pd.Series) -> str:
-    """
-    More descriptive status labelling.
+def _adx_sweet_score(adx: pd.Series) -> pd.Series:
+    x = pd.to_numeric(adx, errors="coerce")
+    score = pd.Series(0.0, index=x.index)
+    score[(x >= 25) & (x <= 35)] = 100
+    score[(x > 35) & (x <= 45)] = 85
+    score[(x >= 20) & (x < 25)] = 55
+    score[(x > 45) & (x <= 55)] = 45
+    score[(x > 55)] = 20
+    return score
 
-    WATCH now has reasoned sub-labels instead of acting as a vague bucket.
-    """
+
+def _rsi_sweet_score(rsi: pd.Series) -> pd.Series:
+    x = pd.to_numeric(rsi, errors="coerce")
+    score = pd.Series(0.0, index=x.index)
+    score[(x >= 55) & (x <= 65)] = 100
+    score[(x > 65) & (x <= 72)] = 80
+    score[(x >= 50) & (x < 55)] = 55
+    score[(x > 72) & (x <= 78)] = 45
+    score[(x < 50)] = 20
+    score[(x > 78)] = 15
+    return score
+
+
+def _ema_distance_score(dist: pd.Series) -> pd.Series:
+    x = pd.to_numeric(dist, errors="coerce")
+    score = pd.Series(0.0, index=x.index)
+    score[(x >= 0) & (x <= 3)] = 100
+    score[(x > 3) & (x <= 6)] = 80
+    score[(x > 6) & (x <= 8)] = 45
+    score[(x > 8)] = 15
+    score[(x < 0) & (x >= -2)] = 40
+    score[(x < -2)] = 10
+    return score
+
+
+def _recent_high_score(dist_to_high: pd.Series) -> pd.Series:
+    # Dist_To_20D_High_Pct: positive = below high, negative = above/breakout
+    return score_distance_to_resistance(dist_to_high)
+
+
+def _range_atr_score(day_range_atr: pd.Series) -> pd.Series:
+    x = pd.to_numeric(day_range_atr, errors="coerce")
+    score = pd.Series(0.0, index=x.index)
+    score[(x >= 0.6) & (x <= 1.5)] = 100
+    score[(x > 1.5) & (x <= 2.0)] = 75
+    score[(x > 2.0) & (x <= 2.5)] = 40
+    score[(x > 2.5)] = 15
+    score[(x < 0.6)] = 50
+    return score
+
+
+def compute_mode_c_scores(df: pd.DataFrame, near_close: bool = False) -> pd.DataFrame:
+    out = df.copy()
+    out["mansfield_rs_score"] = normalize_0_100(out["Mansfield_RS"], higher_is_better=True)
+    out["rs_momentum_score"] = normalize_0_100(out["RS_Momentum_10D"], higher_is_better=True)
+    out["adx_sweet_score"] = _adx_sweet_score(out["ADX14"])
+    out["rsi_sweet_score"] = _rsi_sweet_score(out["RSI14"])
+    out["volume_score"] = normalize_0_100(out["Volume_Ratio_20D"], higher_is_better=True)
+    out["projected_rvol_score"] = normalize_0_100(out.get("Projected_RVol_20D", out["Volume_Ratio_20D"]), higher_is_better=True)
+    out["ema_distance_score"] = _ema_distance_score(out["Dist_From_EMA10_Pct"])
+    out["recent_high_score"] = _recent_high_score(out["Dist_To_20D_High_Pct"])
+    out["close_location_score"] = pd.to_numeric(out.get("Close_Location_Value", 0), errors="coerce").clip(0, 100)
+    out["day_range_score"] = _range_atr_score(out.get("Day_Range_ATR", pd.Series(index=out.index)))
+
+    weights = NEAR_CLOSE_WEIGHTS if near_close else MODE_C_WEIGHTS
+    total = pd.Series(0.0, index=out.index)
+    for col, weight in weights.items():
+        total += out[col].fillna(0) * weight
+
+    out["ModeC_Technical_Score"] = total.round(2)
+    return out
+
+
+def classify_setup(row: pd.Series) -> str:
     if not row.get("Pass_Gates", False):
         return "REJECTED"
 
@@ -92,68 +181,102 @@ def classify_setup(row: pd.Series) -> str:
 
     if pd.notna(prior_drop) and prior_drop > 25:
         return "WATCH_POST_BREAKDOWN"
-
     if weak_rs and too_far:
         return "WATCH_WEAK_RS_TOO_FAR"
-
     if weak_rs:
         return "WATCH_WEAK_RS"
-
     if weak_rsi and near_res:
         return "WATCH_WEAK_RSI"
-
     if too_far:
         return "WATCH_TOO_FAR_FROM_RESISTANCE"
-
     if near_res and not compressed:
         return "WATCH_NEAR_RESISTANCE_NOT_TIGHT"
-
     if near_res and compressed and int(hl_count or 0) == 0:
         return "WATCH_NEEDS_HIGHER_LOW"
-
     if near_res:
         return "WATCH_NEAR_RESISTANCE"
-
     return "WATCH_REVIEW"
 
 
+def classify_mode_c(row: pd.Series, near_close: bool = False, friday_strict: bool = False) -> str:
+    if not row.get("Pass_Gates", False):
+        return "REJECTED"
+
+    rvol = row.get("Projected_RVol_20D", row.get("Volume_Ratio_20D", np.nan))
+    clv = row.get("Close_Location_Value", np.nan)
+    dist_ema10 = row.get("Dist_From_EMA10_Pct", np.nan)
+    day_atr = row.get("Day_Range_ATR", np.nan)
+    breakout = bool(row.get("Breakout_Hold_20D", False))
+    vol_breakout = pd.notna(rvol) and rvol >= 2.0
+    near_high = pd.notna(row.get("Dist_To_20D_High_Pct", np.nan)) and row.get("Dist_To_20D_High_Pct") <= 3
+
+    if near_close:
+        if pd.notna(clv) and clv < 50:
+            return "FADING_INTO_CLOSE"
+        if pd.notna(dist_ema10) and dist_ema10 > (5 if friday_strict else 8):
+            return "EXTENDED_AVOID"
+        if friday_strict:
+            return "FRIDAY_STRONG_CLOSE" if breakout else "FRIDAY_ENTRY_READY"
+        if breakout and vol_breakout:
+            return "NEAR_CLOSE_BREAKOUT_READY"
+        return "NEAR_CLOSE_ENTRY_READY"
+
+    if pd.notna(dist_ema10) and dist_ema10 > 8:
+        return "EXTENDED_AVOID"
+    if breakout and vol_breakout:
+        return "MOMENTUM_BREAKOUT_READY"
+    if near_high:
+        return "MOMENTUM_CONTINUATION_READY"
+    return "MOMENTUM_WATCHLIST"
+
+
 def setup_reason(row: pd.Series) -> str:
-    status = str(row.get("Setup_Status", ""))
-    pieces: list[str] = []
+    if not row.get("Pass_Gates", False):
+        return "Failed gates: " + str(row.get("Fail_Reasons", ""))
 
-    if not bool(row.get("Pass_Gates", False)):
-        return f"Failed gates: {row.get('Fail_Reasons', '')}"
+    status = row.get("Setup_Status", "")
+    parts = []
 
-    dist = row.get("Dist_To_Resistance_Pct", np.nan)
-    rs_mom = row.get("RS_Momentum_10D", np.nan)
-    rsi = row.get("Composite_RSI", np.nan)
-    bbw = row.get("BBW_Pctl", np.nan)
-    vol = row.get("Volume_Ratio", np.nan)
-    prior_drop = row.get("Prior_Drop_Pct", np.nan)
+    if status.startswith("SETUP") or status.startswith("TRIGGERED"):
+        parts.append("Constructive early-stage setup.")
+    elif "WEAK_RS" in status:
+        parts.append("RS momentum is not yet improving.")
+    elif "TOO_FAR" in status:
+        parts.append("Price is still too far from resistance.")
+    elif "POST_BREAKDOWN" in status:
+        parts.append("Recent range may be post-breakdown consolidation, not accumulation.")
+    elif "NOT_TIGHT" in status:
+        parts.append("Near resistance but volatility/base is not tight enough.")
+    elif "HIGHER_LOW" in status:
+        parts.append("Needs clearer higher-low structure.")
+    else:
+        parts.append("Passed gates but needs manual chart review.")
 
-    if pd.notna(dist):
-        if dist < 0:
-            pieces.append("above resistance")
-        elif dist <= 3:
-            pieces.append("within 3% of resistance")
-        elif dist <= 5:
-            pieces.append("within 5% of resistance")
-        else:
-            pieces.append(f"{dist:.1f}% below resistance")
+    try:
+        parts.append(f"Dist to resistance: {row.get('Dist_To_Resistance_Pct'):.2f}%.")
+        parts.append(f"RS momentum: {row.get('RS_Momentum_10D'):.2f}.")
+        parts.append(f"RSI: {row.get('Composite_RSI'):.1f}.")
+    except Exception:
+        pass
 
-    if pd.notna(rs_mom):
-        pieces.append("RS improving" if rs_mom > 0 else "RS weakening")
+    return " ".join(parts)
 
-    if pd.notna(rsi):
-        pieces.append("RSI >= 50" if rsi >= 50 else "RSI < 50")
 
-    if pd.notna(bbw):
-        pieces.append("compressed" if bbw <= 25 else "not tightly compressed")
+def mode_c_reason(row: pd.Series) -> str:
+    if not row.get("Pass_Gates", False):
+        return "Failed gates: " + str(row.get("Fail_Reasons", ""))
 
-    if pd.notna(vol):
-        pieces.append("volume confirmation" if vol >= 1.5 else "no volume confirmation")
+    bits = []
+    if row.get("Breakout_Hold_20D", False):
+        bits.append("Holding above recent 20D resistance.")
+    else:
+        bits.append("Trend is aligned; not necessarily a fresh breakout.")
 
-    if pd.notna(prior_drop) and prior_drop > 25:
-        pieces.append("large prior drop into base")
-
-    return f"{status}: " + "; ".join(pieces)
+    try:
+        bits.append(f"ADX {row.get('ADX14'):.1f}, RSI {row.get('RSI14'):.1f}.")
+        bits.append(f"RS {row.get('Mansfield_RS'):.2f}, RS-Mom {row.get('RS_Momentum_10D'):.2f}.")
+        bits.append(f"RVol {row.get('Volume_Ratio_20D'):.2f}x / projected {row.get('Projected_RVol_20D', row.get('Volume_Ratio_20D')):.2f}x.")
+        bits.append(f"Close location {row.get('Close_Location_Value'):.0f}%, EMA10 distance {row.get('Dist_From_EMA10_Pct'):.2f}%.")
+    except Exception:
+        pass
+    return " ".join(bits)
