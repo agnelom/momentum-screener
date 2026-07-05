@@ -108,6 +108,10 @@ def show_results(results: pd.DataFrame, errors: pd.DataFrame, score_col: str, di
             st.dataframe(errors, use_container_width=True, hide_index=True)
         return
 
+    results = results.copy()
+    if score_col in results.columns:
+        results["Score"] = results[score_col].round(1)
+
     passing = results[results["Pass_Gates"] == True].copy()
     rejected = results[results["Pass_Gates"] == False].copy()
 
@@ -115,6 +119,18 @@ def show_results(results: pd.DataFrame, errors: pd.DataFrame, score_col: str, di
     status_counts = results["Setup_Status"].value_counts().reset_index()
     status_counts.columns = ["Setup_Status", "Count"]
     st.dataframe(status_counts, use_container_width=True, hide_index=True)
+
+    column_config = {
+        "TradingView": st.column_config.LinkColumn(
+            "TradingView",
+            display_text="📈",
+            help="Open NSE chart in TradingView",
+        ),
+        "Score": st.column_config.NumberColumn("Score", format="%.1f"),
+        "ADX14": st.column_config.NumberColumn("ADX", format="%.1f"),
+        "RSI14": st.column_config.NumberColumn("RSI", format="%.1f"),
+        "Mansfield_RS": st.column_config.NumberColumn("RS", format="%.2f"),
+    }
 
     st.subheader("Top candidates")
     if passing.empty:
@@ -126,19 +142,16 @@ def show_results(results: pd.DataFrame, errors: pd.DataFrame, score_col: str, di
             top[available_cols],
             use_container_width=True,
             hide_index=True,
-            column_config={
-                "TradingView": st.column_config.LinkColumn("TradingView"),
-                score_col: st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
-            },
+            column_config=column_config,
         )
 
     csv = results.to_csv(index=False).encode("utf-8")
     st.download_button("Download full results CSV", data=csv, file_name=file_name, mime="text/csv")
 
     with st.expander("Rejected stocks and reasons"):
-        cols = ["Symbol", "Close", score_col, "Fail_Reasons", "TradingView"]
+        cols = ["Symbol", "Close", "TradingView", "ADX14", "RSI14", "Mansfield_RS", "Score", "Fail_Reasons"]
         cols = [c for c in cols if c in rejected.columns]
-        st.dataframe(rejected[cols], use_container_width=True, hide_index=True, column_config={"TradingView": st.column_config.LinkColumn("TradingView")})
+        st.dataframe(rejected[cols], use_container_width=True, hide_index=True, column_config=column_config)
 
     if not errors.empty:
         with st.expander("Download / processing errors"):
@@ -169,11 +182,12 @@ if run_btn:
                     **mode_b_params,
                 )
                 display_cols = [
-                    "Symbol", "Setup_Status", "Setup_Reason", "ModeB_Technical_Score", "Close",
-                    "Price_vs_150DMA", "SMA150_Slope_20D_Pct", "Mansfield_RS", "RS_Momentum_10D",
+                    "Symbol", "Close", "TradingView", "ADX14", "RSI14", "Mansfield_RS", "Score",
+                    "Setup_Status", "Setup_Reason",
+                    "Price_vs_150DMA", "SMA150_Slope_20D_Pct", "RS_Momentum_10D",
                     "BBW_Pctl", "Base_Length_Weeks", "Base_Range_Pct", "Higher_Low_Count",
                     "Prior_Drop_Pct", "Dist_To_Resistance_Pct", "Volume_Ratio", "Composite_RSI",
-                    "Avg_Traded_Value_20D_Cr", "TradingView",
+                    "Avg_Traded_Value_20D_Cr",
                 ]
                 show_results(results, errors, "ModeB_Technical_Score", display_cols, "momentum_screener_results.csv")
 
@@ -188,11 +202,12 @@ if run_btn:
                     **mode_c_params,
                 )
                 display_cols = [
-                    "Symbol", "Setup_Status", "Setup_Reason", "ModeC_Technical_Score", "Close",
-                    "EMA10", "EMA20", "EMA50", "Dist_From_EMA10_Pct", "ADX14", "RSI14",
-                    "Mansfield_RS", "RS_Momentum_10D", "Volume_Ratio_20D", "RVol_20D_Pct",
+                    "Symbol", "Close", "TradingView", "ADX14", "RSI14", "Mansfield_RS", "Score",
+                    "Setup_Status", "Setup_Reason",
+                    "EMA10", "EMA20", "EMA50", "Dist_From_EMA10_Pct",
+                    "RS_Momentum_10D", "Volume_Ratio_20D", "RVol_20D_Pct",
                     "Close_Location_Value", "Day_Range_ATR", "Dist_To_20D_High_Pct", "Breakout_Hold_20D",
-                    "Avg_Traded_Value_20D_Cr", "TradingView",
+                    "Avg_Traded_Value_20D_Cr",
                 ]
                 show_results(results, errors, "ModeC_Technical_Score", display_cols, "momentum_continuation_eod_results.csv")
 
@@ -208,11 +223,12 @@ if run_btn:
                     **near_close_params,
                 )
                 display_cols = [
-                    "Symbol", "Setup_Status", "Setup_Reason", "ModeC_Technical_Score", "Close",
-                    "EMA10", "EMA20", "EMA50", "Dist_From_EMA10_Pct", "ADX14", "RSI14",
-                    "Mansfield_RS", "RS_Momentum_10D", "Volume_Ratio_20D", "Projected_RVol_20D",
+                    "Symbol", "Close", "TradingView", "ADX14", "RSI14", "Mansfield_RS", "Score",
+                    "Setup_Status", "Setup_Reason",
+                    "EMA10", "EMA20", "EMA50", "Dist_From_EMA10_Pct",
+                    "RS_Momentum_10D", "Volume_Ratio_20D", "Projected_RVol_20D",
                     "Projected_RVol_20D_Pct", "Close_Location_Value", "Day_Range_ATR", "Dist_To_20D_High_Pct",
-                    "Breakout_Hold_20D", "Avg_Traded_Value_20D_Cr", "TradingView",
+                    "Breakout_Hold_20D", "Avg_Traded_Value_20D_Cr",
                 ]
                 show_results(results, errors, "ModeC_Technical_Score", display_cols, "near_close_momentum_results.csv")
         except Exception as exc:

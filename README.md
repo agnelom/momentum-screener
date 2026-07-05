@@ -122,3 +122,20 @@ The app uses Yahoo Finance via `yfinance`. During market hours, daily candles an
 - `EXTENDED_AVOID`
 - `REJECTED`
 
+
+## Latest table layout update
+
+The results table now starts with the most-used trading decision columns:
+
+1. Symbol
+2. Close
+3. TradingView chart link shown as a chart icon
+4. ADX
+5. RSI
+6. RS / Mansfield RS
+7. Plain numeric score
+8. Setup status
+9. Setup reason
+10. Remaining diagnostic columns
+
+The score is now shown as a plain number rather than a visual progress bar so the table is easier to scan and export.

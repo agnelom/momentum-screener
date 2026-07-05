@@ -36,7 +36,12 @@ def _latest(series: pd.Series) -> float:
 
 def compute_mode_b_latest_factors(symbol: str, df: pd.DataFrame, benchmark_close: pd.Series) -> dict:
     close = df["Close"]
+    high = df["High"]
+    low = df["Low"]
     volume = df["Volume"]
+
+    adx14 = adx(high, low, close, 14)
+    rsi14 = rsi(close, 14)
 
     sma150 = sma(close, 150)
     sma150_slope = (sma150 - sma150.shift(20)) / sma150.shift(20) * 100
@@ -63,6 +68,8 @@ def compute_mode_b_latest_factors(symbol: str, df: pd.DataFrame, benchmark_close
         "Price_vs_150DMA": _latest(price_vs_150),
         "SMA150": _latest(sma150),
         "SMA150_Slope_20D_Pct": _latest(sma150_slope),
+        "ADX14": _latest(adx14),
+        "RSI14": _latest(rsi14),
         "Mansfield_RS": _latest(mrs),
         "RS_Momentum_10D": _latest(rsm),
         "Volume_Ratio": _latest(vol_ratio),
